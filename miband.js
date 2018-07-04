@@ -190,7 +190,7 @@ class MiBand extends EventEmitter {
 
         // Start pinging HRM
         this.hrmTimer = this.hrmTimer || setInterval(() => {
-            debug('Pinging HRM');
+            console.log('Pinging HRM');
             writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x16]));
         }, 12000);
     }

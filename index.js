@@ -4,6 +4,7 @@ const noble = new Noble(bindings);
 const util = require('util');
 const MiBand = require('./miband');
 
+let peripheralMiBand;
 
 function delay(ms = 1000) {
     return new Promise(resolve => setTimeout(resolve, ms))
@@ -12,7 +13,7 @@ function delay(ms = 1000) {
 const log = console.log;
 
 noble.on('stateChange', function (state) {
-    if (state === 'poweredOn') {
+    if (state === 'poweredOn' && (!peripheralMiBand || !(['connected', 'connecting'].includes(peripheralMiBand.state)))) {
         noble.startScanning();
     } else {
         noble.stopScanning();
@@ -34,6 +35,7 @@ async function init(miband) {
     log(`HW ver: ${info.hw_ver}  SW ver: ${info.sw_ver}`);
     log(`Battery: ${info.battery.level}%`);
     log(`Time: ${info.time.toLocaleString()}`);
+    log(`Serial ${info.serial}`);
     //
     await delay();
     let ped = await miband.getPedometerStats();
@@ -74,6 +76,7 @@ noble.on('discover', async function (peripheral) {
     if (peripheral.advertisement.localName && peripheral.advertisement.localName.includes('MI Band 2')) {
         noble.stopScanning();
         try {
+            peripheralMiBand = peripheral;
             await util.promisify(peripheral.connect.bind(peripheral))();
             const miband = new MiBand(peripheral);
             await miband.discoverCharacteristics();
@@ -85,3 +88,4 @@ noble.on('discover', async function (peripheral) {
         }
     }
 });
+
