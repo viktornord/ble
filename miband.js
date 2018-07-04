@@ -32,7 +32,8 @@ class MiBand extends EventEmitter {
             uuid.UUID_SERVICE_MIBAND_1,
             uuid.UUID_SERVICE_MIBAND_2,
             uuid.UUID_SERVICE_HEART_RATE,
-            uuid.UUID_SERVICE_IMMEDIATE_ALERT
+            uuid.UUID_SERVICE_IMMEDIATE_ALERT,
+            uuid.UUID_SERVICE_DEVICE_INFORMATION
         ];
     }
 
@@ -43,7 +44,14 @@ class MiBand extends EventEmitter {
             uuid.UUID_CHAR_EVENT, uuid.UUID_CHAR_HRM_CTRL,
             uuid.UUID_CHAR_HRM_DATA,
             uuid.UUID_CHAR_USER,
-            uuid.UUID_CHAR_ALERT_DATA
+            uuid.UUID_CHAR_ALERT_DATA,
+            uuid.UUID_CHAR_BATT,
+            uuid.UUID_CHAR_STEPS,
+            uuid.UUID_CHAR_DEVICE_INFO_SW,
+            uuid.UUID_CHAR_DEVICE_INFO_HW,
+            uuid.UUID_CHAR_DEVICE_INFO_SERIAL,
+            uuid.UUID_CHAR_TIME
+
         ];
     }
 
@@ -237,7 +245,7 @@ class MiBand extends EventEmitter {
     }
 
     async getSerial() {
-        if (!this.device.char[uuid.UUID_CHAR_DEVICE_INFO_SERIAL]) return undefined;
+        if (!this.characteristics.serial) return undefined;
         let data = await readValueFromChar(this.characteristics.serial);
         return this.textDec.decode(data)
     }
