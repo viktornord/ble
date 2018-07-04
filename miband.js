@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const {TextDecoder} = require('util');
 const debug = require('debug')('MiBand');
 const uuid = require('./uuid');
+const textDecoder = new TextDecoder();
 
 
 function delay(ms) {
@@ -58,9 +59,7 @@ class MiBand extends EventEmitter {
     constructor(peripheral) {
         super();
         this.device = peripheral;
-        // TODO: this is constant for now, but should random and managed per-device
-        this.key = new Buffer('30313233343536373839404142434445', 'hex');
-        this.textDec = new TextDecoder();
+        this.key = new Buffer(this.device.id, 'hex');
 
     }
 
@@ -68,9 +67,7 @@ class MiBand extends EventEmitter {
         const {characteristics} = await new Promise((resolve, reject) => this.device.discoverSomeServicesAndCharacteristics(
             MiBand.getServicesToDiscover(),
             MiBand.getCharacteristicsToDiscover(),
-            (error, services, characteristics) => {
-                error ? reject(error) : resolve({services, characteristics});
-            }
+            (error, services, characteristics) => error ? reject(error) : resolve({services, characteristics})
         ));
         this.characteristics = {
             auth: this.getCharacteristic(characteristics, uuid.UUID_CHAR_AUTH),
@@ -247,13 +244,13 @@ class MiBand extends EventEmitter {
     async getSerial() {
         if (!this.characteristics.serial) return undefined;
         let data = await readValueFromChar(this.characteristics.serial);
-        return this.textDec.decode(data)
+        return textDecoder.decode(data)
     }
 
     async getHwRevision() {
 
         let data = await readValueFromChar(this.characteristics.hw);
-        data = this.textDec.decode(data);
+        data = textDecoder.decode(data);
         if (data.startsWith('V') || data.startsWith('v'))
             data = data.substring(1);
         return data
@@ -261,7 +258,7 @@ class MiBand extends EventEmitter {
 
     async getSwRevision() {
         let data = await readValueFromChar(this.characteristics.sw);
-        data = this.textDec.decode(data);
+        data = textDecoder.decode(data);
         if (data.startsWith('V') || data.startsWith('v'))
             data = data.substring(1);
         return data
@@ -374,18 +371,11 @@ class MiBand extends EventEmitter {
 module.exports = MiBand;
 
 function readValueFromChar(char) {
-    return new Promise((resolve, reject) => {
-        char.read((err, data) => {
-            err ? reject(err) : resolve(data);
-        })
-    });
+
+  return new Promise((resolve, reject) => char.read((err, data) => err ? reject(err) : resolve(data)));
 }
 
 function writeValueToChar(char, value) {
-    return new Promise((resolve, reject) => {
-        char.write(value, true, function (err, data) {
-            err && console.error(err);
-            err ? reject(err) : resolve(data);
-        });
-    });
+
+  return new Promise((resolve, reject) => char.write(value, true, (err, data) => err ? reject(err) : resolve(data)));
 }
