@@ -126,24 +126,23 @@ class MiBand extends EventEmitter {
 
   }
 
-  async startNotificationsFor(charUID) {
-    let char = this.device.char[charUID];
-    char.on('data', this.handleNotify.bind(this, charUID));
+  async startNotificationsFor(char) {
+    char.on('data', this.handleNotify.bind(this, char.uuid));
     char.subscribe(err => err && console.error('start notif', err));
   }
 
   async init() {
-    await this.startNotificationsFor(UUID_CHAR_AUTH);
+    await this.startNotificationsFor(this.characteristics.auth);
     console.log('startNotificationsFor AUTH');
     await delay(1000);
     await this.authenticate();
     console.log('authenticate');
-    await this.startNotificationsFor(UUID_CHAR_HRM_DATA);
+    await this.startNotificationsFor(this.characteristics.heartRateData);
     console.log('startNotificationsFor HRM_DATA');
-    await this.startNotificationsFor(UUID_CHAR_EVENT);
-    console.log('startNotificationsFor EVENT');
-    await this.startNotificationsFor(UUID_CHAR_RAW_DATA);
-    console.log('startNotificationsFor RAW_DATA');
+    await this.startNotificationsFor(this.characteristics.heartRateControl);
+    // console.log('startNotificationsFor EVENT');
+    // await this.startNotificationsFor(UUID_CHAR_RAW_DATA);
+    // console.log('startNotificationsFor RAW_DATA');
   }
 
   /*
@@ -160,15 +159,15 @@ class MiBand extends EventEmitter {
   }
 
   authReqRandomKey() {
-    return writeValueFromChar(this.device.char[UUID_CHAR_AUTH], AB([0x02, 0x08]))
+    return writeValueFromChar(this.characteristics.auth, AB([0x02, 0x08]))
   }
 
   authSendNewKey(key) {
-    return writeValueFromChar(this.device.char[UUID_CHAR_AUTH], AB([0x01, 0x08], key))
+    return writeValueFromChar(this.characteristics.auth, AB([0x01, 0x08], key))
   }
 
   authSendEncKey(encrypted) {
-    return writeValueFromChar(this.device.char[UUID_CHAR_AUTH], AB([0x03, 0x08], encrypted))
+    return writeValueFromChar(this.characteristics.auth, AB([0x03, 0x08], encrypted))
   }
 
   /*
@@ -210,9 +209,9 @@ async showNotification(type = 'message') {
 
   async hrmRead() {
 
-    await writeValueFromChar(this.device.char[UUID_CHAR_HRM_CTRL], new Buffer([0x15, 0x01, 0x00]));
-    await writeValueFromChar(this.device.char[UUID_CHAR_HRM_CTRL], new Buffer([0x15, 0x02, 0x00]));
-    await writeValueFromChar(this.device.char[UUID_CHAR_HRM_CTRL], new Buffer([0x15, 0x02, 0x01]));
+    await writeValueFromChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x00]));
+    await writeValueFromChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x02, 0x00]));
+    await writeValueFromChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x02, 0x01]));
     return new Promise((resolve, reject) => {
       setTimeout(() => reject('hrmRead Timeout'), 30000);
       this.once('heart_rate', resolve);
@@ -220,14 +219,14 @@ async showNotification(type = 'message') {
   }
 
   async hrmStart() {
-    await writeValueFromChar(this.device.char[UUID_CHAR_HRM_CTRL], new Buffer([0x15, 0x02, 0x00]));
-    await writeValueFromChar(this.device.char[UUID_CHAR_HRM_CTRL], new Buffer([0x15, 0x01, 0x00]));
-    await writeValueFromChar(this.device.char[UUID_CHAR_HRM_CTRL], new Buffer([0x15, 0x01, 0x01]));
+    await writeValueFromChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x02, 0x00]));
+    await writeValueFromChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x00]));
+    await writeValueFromChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x01]));
 
     // Start pinging HRM
     this.hrmTimer = this.hrmTimer || setInterval(() => {
       debug('Pinging HRM');
-      writeValueFromChar(this.device.char[UUID_CHAR_HRM_CTRL], new Buffer([0x16]));
+      writeValueFromChar(this.characteristics.heartRateControl, new Buffer([0x16]));
     }, 12000);
   }
 
