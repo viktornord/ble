@@ -7,6 +7,7 @@ const {TextDecoder} = require('util');
 const debug = require('debug')('MiBand');
 const uuid = require('./uuid');
 const textDecoder = new TextDecoder();
+let lastHRDate;
 
 
 function delay(ms) {
@@ -107,8 +108,8 @@ class MiBand extends EventEmitter {
         console.log('startNotificationsFor HRM_CONTROL');
         await this.startNotificationsFor(this.characteristics.event);
         console.log('startNotificationsFor EVENT');
-         await this.startNotificationsFor(this.characteristics.rawData);
-         console.log('startNotificationsFor RAW_DATA');
+        await this.startNotificationsFor(this.characteristics.rawData);
+        console.log('startNotificationsFor RAW_DATA');
     }
 
     /*
@@ -188,16 +189,17 @@ class MiBand extends EventEmitter {
     /*CONTINIOUS*/
 
     async hrmStart() {
+        console.log('start continuous HR');
         await delay(1000);
         await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x02, 0x00]));
         await delay(1000);
         await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x00]));
-        await delay(1000);
-        await writeValueToChar(this.characteristics.rawControl, new Buffer([0x01, 0x03, 0x19]));
+       /* await delay(1000);
+        await writeValueToChar(this.characteristics.rawControl, new Buffer([0x01, 0x03, 0x19]));*/
         await delay(1000);
         await writeValueToChar(this.characteristics.heartRateData, new Buffer([0x01, 0x00]));
-        await delay(1000);
-        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x01]));
+        /*await delay(1000);
+        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x01]));*/
         //await delay(1000);
         //await writeValueToChar(this.characteristics.rawControl, new Buffer([0x02]));
 
@@ -205,15 +207,24 @@ class MiBand extends EventEmitter {
             // Start pinging HRM
             this.hrmTimer = setTimeout(async () => {
                 console.log('Pinging HRM');
-                await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x16]));
-                pingHR();
-            }, 8000);
+                if (Date.now() - lastHRDate < 15000) {
+                    await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x16]));
+                    pingHR();
+                } else {
+                    console.log('HR was measured long time ago...');
+                    clearTimeout(this.hrmTimer);
+                    this.hrmTimer = undefined;
+                    this.hrmStart();
+                }
+
+            }, 10000);
         };
 
         pingHR();
     }
 
     async hrmStop() {
+        console.log('hrm stop');
         clearTimeout(this.hrmTimer);
         this.hrmTimer = undefined;
         await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x00]));
@@ -361,7 +372,8 @@ class MiBand extends EventEmitter {
 
         } else if (charUID === uuid.UUID_CHAR_HRM_DATA) {
             let rate = value.readUInt16BE(0);
-            this.emit('heart_rate', rate)
+            this.emit('heart_rate', rate);
+            lastHRDate = Date.now();
 
         } else if (charUID === uuid.UUID_CHAR_EVENT) {
             const cmd = value.toString('hex');

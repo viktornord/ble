@@ -4,7 +4,7 @@ const noble = new Noble(bindings);
 const util = require('util');
 const MiBand = require('./miband');
 
-let peripheralMiBand;
+let peripheralMiBand, miband;
 
 function delay(ms = 1000) {
     return new Promise(resolve => setTimeout(resolve, ms))
@@ -81,17 +81,34 @@ noble.on('discover', async function (peripheral) {
         ' RSSI ' + peripheral.rssi + ':' + 'local name: \t' + peripheral.advertisement.localName);
     if (peripheral.advertisement.localName && peripheral.advertisement.localName.includes('MI Band 2')) {
         noble.stopScanning();
-        try {
-            peripheralMiBand = peripheral;
-            await util.promisify(peripheral.connect.bind(peripheral))();
-            const miband = new MiBand(peripheral);
-            await miband.discoverCharacteristics();
-            await init(miband);
+        connect(peripheral);
 
-        }
-        catch (error) {
-            console.error(error);
-        }
     }
 });
+async function connect(peripheral) {
+    try {
+        peripheralMiBand = peripheral;
+        await util.promisify(peripheral.connect.bind(peripheral))();
+        peripheral.once('disconnect', async err => {
+            log('disconnect');
+            await miband.hrmStop();
+            connect(peripheral);
+        });
+        miband = new MiBand(peripheral);
+        await miband.discoverCharacteristics();
+        await init(miband);
 
+    }
+    catch (error) {
+        console.error(error);
+    }
+}
+
+process.on('exit', code => {
+    log('exit');
+    if (miband) {
+        miband.hrmStop();
+    }
+     noble.stopScanning();
+    if (peripheralMiBand) peripheralMiBand.disconnect();
+});
