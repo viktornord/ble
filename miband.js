@@ -70,7 +70,14 @@ class MiBand extends EventEmitter {
             heartRateControl: this.getCharacteristic(characteristics, uuid.UUID_CHAR_HRM_CTRL),
             heartRateData: this.getCharacteristic(characteristics, uuid.UUID_CHAR_HRM_DATA),
             user: this.getCharacteristic(characteristics, uuid.UUID_CHAR_USER),
-            alert: this.getCharacteristic(characteristics, uuid.UUID_CHAR_ALERT_DATA)
+            alert: this.getCharacteristic(characteristics, uuid.UUID_CHAR_ALERT_DATA),
+            battery: this.getCharacteristic(characteristics, uuid.UUID_CHAR_BATT),
+            steps: this.getCharacteristic(characteristics, uuid.UUID_CHAR_STEPS),
+            sw: this.getCharacteristic(characteristics, uuid.UUID_CHAR_DEVICE_INFO_SW),
+            hw: this.getCharacteristic(characteristics, uuid.UUID_CHAR_DEVICE_INFO_HW),
+            serial: this.getCharacteristic(characteristics, uuid.UUID_CHAR_DEVICE_INFO_SERIAL),
+            time: this.getCharacteristic(characteristics, uuid.UUID_CHAR_TIME)
+
         };
     }
 
@@ -137,16 +144,16 @@ class MiBand extends EventEmitter {
         debug('Notification:', type);
         switch (type) {
             case 'message':
-                writeValueToChar(this.device.char[uuid.UUID_CHAR_ALERT_DATA], new Buffer([0x01]));
+                writeValueToChar(this.characteristics.alert, new Buffer([0x01]));
                 break;
             case 'phone':
-                writeValueToChar(this.device.char[uuid.UUID_CHAR_ALERT_DATA], new Buffer([0x02]));
+                writeValueToChar(this.characteristics.alert, new Buffer([0x02]));
                 break;
             case 'vibrate':
-                writeValueToChar(this.device.char[uuid.UUID_CHAR_ALERT_DATA], new Buffer([0x03]));
+                writeValueToChar(this.characteristics.alert, new Buffer([0x03]));
                 break;
             case 'off':
-                writeValueToChar(this.device.char[uuid.UUID_CHAR_ALERT_DATA], new Buffer([0x00]));
+                writeValueToChar(this.characteristics.alert, new Buffer([0x00]));
                 break;
             default:
                 throw new Error('Unrecognized notification type');
@@ -191,7 +198,7 @@ class MiBand extends EventEmitter {
      */
 
     async getPedometerStats() {
-        let data = await readValueFromChar(this.device.char[uuid.UUID_CHAR_STEPS]);
+        let data = await readValueFromChar(this.characteristics.steps);
         data = Buffer.from(data.buffer);
         let result = {};
         //unknown = data.readUInt8(0)
@@ -208,7 +215,7 @@ class MiBand extends EventEmitter {
 
     async getBatteryInfo() {
         await delay();
-        let data = await readValueFromChar(this.device.char[uuid.UUID_CHAR_BATT]);
+        let data = await readValueFromChar(this.characteristics.battery);
         data = Buffer.from(data.buffer);
         if (data.length <= 2) return 'unknown';
 
@@ -224,20 +231,20 @@ class MiBand extends EventEmitter {
 
     async getTime() {
         await delay();
-        let data = await readValueFromChar(this.device.char[uuid.UUID_CHAR_TIME]);
+        let data = await readValueFromChar(this.characteristics.time);
         data = Buffer.from(data.buffer);
         return parseDate(data)
     }
 
     async getSerial() {
         if (!this.device.char[uuid.UUID_CHAR_DEVICE_INFO_SERIAL]) return undefined;
-        let data = await readValueFromChar(this.device.char[uuid.UUID_CHAR_DEVICE_INFO_SERIAL]);
+        let data = await readValueFromChar(this.characteristics.serial);
         return this.textDec.decode(data)
     }
 
     async getHwRevision() {
 
-        let data = await readValueFromChar(this.device.char[uuid.UUID_CHAR_DEVICE_INFO_HW]);
+        let data = await readValueFromChar(this.characteristics.hw);
         data = this.textDec.decode(data);
         if (data.startsWith('V') || data.startsWith('v'))
             data = data.substring(1);
@@ -245,7 +252,7 @@ class MiBand extends EventEmitter {
     }
 
     async getSwRevision() {
-        let data = await readValueFromChar(this.device.char[uuid.UUID_CHAR_DEVICE_INFO_SW]);
+        let data = await readValueFromChar(this.characteristics.sw);
         data = this.textDec.decode(data);
         if (data.startsWith('V') || data.startsWith('v'))
             data = data.substring(1);
@@ -284,16 +291,16 @@ class MiBand extends EventEmitter {
     /*
      * RAW data
      */
-/*        async rawStart() {
-            await this.char.raw_ctrl.writeValue(AB([0x01, 0x03, 0x19]))
-            await this.hrmStart();
-            await this.char.raw_ctrl.writeValue(AB([0x02]))
-        }
+    /*        async rawStart() {
+                await this.char.raw_ctrl.writeValue(AB([0x01, 0x03, 0x19]))
+                await this.hrmStart();
+                await this.char.raw_ctrl.writeValue(AB([0x02]))
+            }
 
-        async rawStop() {
-            await this.char.raw_ctrl.writeValue(AB([0x03]))
-            await this.hrmStop();
-        }*/
+            async rawStop() {
+                await this.char.raw_ctrl.writeValue(AB([0x03]))
+                await this.hrmStop();
+            }*/
 
     /*
      * Internals
