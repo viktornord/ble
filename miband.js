@@ -67,9 +67,7 @@ class MiBand extends EventEmitter {
         const {characteristics} = await new Promise((resolve, reject) => this.device.discoverSomeServicesAndCharacteristics(
             MiBand.getServicesToDiscover(),
             MiBand.getCharacteristicsToDiscover(),
-            (error, services, characteristics) => {
-                error ? reject(error) : resolve({services, characteristics});
-            }
+            (error, services, characteristics) => error ? reject(error) : resolve({services, characteristics})
         ));
         this.characteristics = {
             auth: this.getCharacteristic(characteristics, uuid.UUID_CHAR_AUTH),
@@ -373,18 +371,11 @@ class MiBand extends EventEmitter {
 module.exports = MiBand;
 
 function readValueFromChar(char) {
-    return new Promise((resolve, reject) => {
-        char.read((err, data) => {
-            err ? reject(err) : resolve(data);
-        })
-    });
+
+  return new Promise((resolve, reject) => char.read((err, data) => err ? reject(err) : resolve(data)));
 }
 
 function writeValueToChar(char, value) {
-    return new Promise((resolve, reject) => {
-        char.write(value, true, function (err, data) {
-            err && console.error(err);
-            err ? reject(err) : resolve(data);
-        });
-    });
+
+  return new Promise((resolve, reject) => char.write(value, true, (err, data) => err ? reject(err) : resolve(data)));
 }
