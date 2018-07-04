@@ -124,15 +124,15 @@ class MiBand extends EventEmitter {
     }
 
     authReqRandomKey() {
-        return writeValueFromChar(this.characteristics.auth, AB([0x02, 0x08]))
+        return writeValueToChar(this.characteristics.auth, AB([0x02, 0x08]))
     }
 
     authSendNewKey(key) {
-        return writeValueFromChar(this.characteristics.auth, AB([0x01, 0x08], key))
+        return writeValueToChar(this.characteristics.auth, AB([0x01, 0x08], key))
     }
 
     authSendEncKey(encrypted) {
-        return writeValueFromChar(this.characteristics.auth, AB([0x03, 0x08], encrypted))
+        return writeValueToChar(this.characteristics.auth, AB([0x03, 0x08], encrypted))
     }
 
     /*
@@ -152,16 +152,16 @@ class MiBand extends EventEmitter {
         debug('Notification:', type);
         switch (type) {
             case 'message':
-                writeValueFromChar(this.device.char[uuid.UUID_SERVICE_ALERT_DATA], new Buffer([0x01]));
+                writeValueToChar(this.device.char[uuid.UUID_SERVICE_ALERT_DATA], new Buffer([0x01]));
                 break;
             case 'phone':
-                writeValueFromChar(this.device.char[uuid.UUID_SERVICE_ALERT_DATA], new Buffer([0x02]));
+                writeValueToChar(this.device.char[uuid.UUID_SERVICE_ALERT_DATA], new Buffer([0x02]));
                 break;
             case 'vibrate':
-                writeValueFromChar(this.device.char[uuid.UUID_SERVICE_ALERT_DATA], new Buffer([0x03]));
+                writeValueToChar(this.device.char[uuid.UUID_SERVICE_ALERT_DATA], new Buffer([0x03]));
                 break;
             case 'off':
-                writeValueFromChar(this.device.char[uuid.UUID_SERVICE_ALERT_DATA], new Buffer([0x00]));
+                writeValueToChar(this.device.char[uuid.UUID_SERVICE_ALERT_DATA], new Buffer([0x00]));
                 break;
             default:
                 throw new Error('Unrecognized notification type');
@@ -174,9 +174,9 @@ class MiBand extends EventEmitter {
 
     async hrmRead() {
 
-        await writeValueFromChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x00]));
-        await writeValueFromChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x02, 0x00]));
-        await writeValueFromChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x02, 0x01]));
+        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x00]));
+        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x02, 0x00]));
+        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x02, 0x01]));
         return new Promise((resolve, reject) => {
             setTimeout(() => reject('hrmRead Timeout'), 30000);
             this.once('heart_rate', resolve);
@@ -184,21 +184,21 @@ class MiBand extends EventEmitter {
     }
 
     async hrmStart() {
-        await writeValueFromChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x02, 0x00]));
-        await writeValueFromChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x00]));
-        await writeValueFromChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x01]));
+        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x02, 0x00]));
+        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x00]));
+        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x01]));
 
         // Start pinging HRM
         this.hrmTimer = this.hrmTimer || setInterval(() => {
             debug('Pinging HRM');
-            writeValueFromChar(this.characteristics.heartRateControl, new Buffer([0x16]));
+            writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x16]));
         }, 12000);
     }
 
     async hrmStop() {
         clearInterval(this.hrmTimer);
         this.hrmTimer = undefined;
-        await writeValueFromChar(this.characteristics.heartRateControl, AB([0x15, 0x01, 0x00]));
+        await writeValueToChar(this.characteristics.heartRateControl, AB([0x15, 0x01, 0x00]));
     }
 
     /*
@@ -268,12 +268,12 @@ class MiBand extends EventEmitter {
     }
 
     async setUserInfo(user) {
-        let data = new Buffer(16)
-        data.writeUInt8(0x4f, 0) // Set user info command
+        let data = new Buffer(16);
+        data.writeUInt8(0x4f, 0); // Set user info command
 
-        data.writeUInt16LE(user.born.getFullYear(), 3)
-        data.writeUInt8(user.born.getMonth() + 1, 5)
-        data.writeUInt8(user.born.getDate(), 6)
+        data.writeUInt16LE(user.born.getFullYear(), 3);
+        data.writeUInt8(user.born.getMonth() + 1, 5);
+        data.writeUInt8(user.born.getDate(), 6);
         switch (user.sex) {
             case 'male':
                 data.writeUInt8(0, 7);
@@ -285,11 +285,11 @@ class MiBand extends EventEmitter {
                 data.writeUInt8(2, 7);
                 break;
         }
-        data.writeUInt16LE(user.height, 8) // cm
-        data.writeUInt16LE(user.weight, 10) // kg
-        data.writeUInt32LE(user.id, 12) // id
+        data.writeUInt16LE(user.height, 8); // cm
+        data.writeUInt16LE(user.weight, 10); // kg
+        data.writeUInt32LE(user.id, 12); // id
 
-        await writeValueFromChar(this.characteristics.user, AB(data));
+        await writeValueToChar(this.characteristics.user, AB(data));
     }
 
     //async reboot() {
@@ -324,7 +324,7 @@ class MiBand extends EventEmitter {
                 this.authReqRandomKey()
             } else if (cmd === '100201') {  // Req Random Number OK
                 let rdn = value.slice(3);
-                let cipher = crypto.createCipher('aes-128-ecb', this.key, '').setAutoPadding(false);
+                let cipher = crypto.createCipheriv('aes-128-ecb', this.key, '').setAutoPadding(false);
                 let encrypted = Buffer.concat([cipher.update(rdn), cipher.final()]);
                 this.authSendEncKey(encrypted)
             } else if (cmd === '100301') {
@@ -336,7 +336,7 @@ class MiBand extends EventEmitter {
             } else if (cmd === '100204') {  // Req Random Number FAIL
                 this.emit('error', 'Key Sending failed')
             } else if (cmd === '100304') {
-                debug('Encryption Key Auth Fail, sending new key...')
+                debug('Encryption Key Auth Fail, sending new key...');
                 this.authSendNewKey(this.key)
             } else {
                 debug('Unhandled auth rsp:', value);
@@ -365,7 +365,7 @@ class MiBand extends EventEmitter {
     getCharacteristic(characteristics, characteristicUUID) {
         const characteristic = characteristics.find(({uuid}) => uuid === characteristicUUID);
         if (!characteristic) {
-            console.warn(`Characteristic with UUID ${serviceUUID} was not found`);
+            console.warn(`Characteristic with UUID ${characteristicUUID} was not found`);
         }
 
         return characteristic;
@@ -382,7 +382,7 @@ function readValueFromChar(char) {
     });
 }
 
-function writeValueFromChar(char, value) {
+function writeValueToChar(char, value) {
     return new Promise((resolve, reject) => {
         char.write(value, true, function (err, data) {
             err && console.error(err);
