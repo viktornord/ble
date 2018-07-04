@@ -66,6 +66,12 @@ async function init(miband) {
     });
     await miband.hrmStart();
 
+//     log('RAW data (no decoding)...');
+//     await miband.rawStart();
+// /*    await delay(30000);
+ //   await miband.rawStop();
+
+
 }
 
 noble.on('discover', async function (peripheral) {

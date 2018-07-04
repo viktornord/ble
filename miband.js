@@ -51,7 +51,9 @@ class MiBand extends EventEmitter {
             uuid.UUID_CHAR_DEVICE_INFO_SW,
             uuid.UUID_CHAR_DEVICE_INFO_HW,
             uuid.UUID_CHAR_DEVICE_INFO_SERIAL,
-            uuid.UUID_CHAR_TIME
+            uuid.UUID_CHAR_TIME,
+            uuid.UUID_CHAR_RAW_CTRL,
+            uuid.UUID_CHAR_RAW_DATA
 
         ];
     }
@@ -81,7 +83,9 @@ class MiBand extends EventEmitter {
             sw: this.getCharacteristic(characteristics, uuid.UUID_CHAR_DEVICE_INFO_SW),
             hw: this.getCharacteristic(characteristics, uuid.UUID_CHAR_DEVICE_INFO_HW),
             serial: this.getCharacteristic(characteristics, uuid.UUID_CHAR_DEVICE_INFO_SERIAL),
-            time: this.getCharacteristic(characteristics, uuid.UUID_CHAR_TIME)
+            time: this.getCharacteristic(characteristics, uuid.UUID_CHAR_TIME),
+            rawControl: this.getCharacteristic(characteristics, uuid.UUID_CHAR_RAW_CTRL),
+            rawData: this.getCharacteristic(characteristics, uuid.UUID_CHAR_RAW_DATA)
 
         };
     }
@@ -103,8 +107,8 @@ class MiBand extends EventEmitter {
         console.log('startNotificationsFor HRM_CONTROL');
         await this.startNotificationsFor(this.characteristics.event);
         console.log('startNotificationsFor EVENT');
-        // await this.startNotificationsFor(uuid.UUID_CHAR_RAW_DATA);
-        // console.log('startNotificationsFor RAW_DATA');
+         await this.startNotificationsFor(this.characteristics.rawData);
+         console.log('startNotificationsFor RAW_DATA');
     }
 
     /*
@@ -180,20 +184,37 @@ class MiBand extends EventEmitter {
         });
     }
 
-    async hrmStart() {
-        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x02, 0x00]));
-        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x00]));
-        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x01]));
 
-        // Start pinging HRM
-        this.hrmTimer = this.hrmTimer || setInterval(() => {
-            console.log('Pinging HRM');
-            writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x16]));
-        }, 12000);
+    /*CONTINIOUS*/
+
+    async hrmStart() {
+        await delay(1000);
+        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x02, 0x00]));
+        await delay(1000);
+        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x00]));
+        await delay(1000);
+        await writeValueToChar(this.characteristics.rawControl, new Buffer([0x01, 0x03, 0x19]));
+        await delay(1000);
+        await writeValueToChar(this.characteristics.heartRateData, new Buffer([0x01, 0x00]));
+        await delay(1000);
+        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x01]));
+        //await delay(1000);
+        //await writeValueToChar(this.characteristics.rawControl, new Buffer([0x02]));
+
+        const pingHR = () => {
+            // Start pinging HRM
+            this.hrmTimer = setTimeout(async () => {
+                console.log('Pinging HRM');
+                await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x16]));
+                pingHR();
+            }, 8000);
+        };
+
+        pingHR();
     }
 
     async hrmStop() {
-        clearInterval(this.hrmTimer);
+        clearTimeout(this.hrmTimer);
         this.hrmTimer = undefined;
         await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x00]));
     }
@@ -296,16 +317,16 @@ class MiBand extends EventEmitter {
     /*
      * RAW data
      */
-    /*        async rawStart() {
-                await this.char.raw_ctrl.writeValue(AB([0x01, 0x03, 0x19]))
-                await this.hrmStart();
-                await this.char.raw_ctrl.writeValue(AB([0x02]))
-            }
+    async rawStart() {
+        await writeValueToChar(this.characteristics.rawControl, new Buffer([0x01, 0x03, 0x19]));
+        await this.hrmStart();
+        await writeValueToChar(this.characteristics.rawControl, new Buffer([0x02]));
+    }
 
-            async rawStop() {
-                await this.char.raw_ctrl.writeValue(AB([0x03]))
-                await this.hrmStop();
-            }*/
+    async rawStop() {
+        await writeValueToChar(this.characteristics.rawControl, new Buffer([0x03]));
+        await this.hrmStop();
+    }
 
     /*
      * Internals
@@ -352,7 +373,7 @@ class MiBand extends EventEmitter {
         } else if (charUID === uuid.UUID_CHAR_RAW_DATA) {
             // TODO: parse adxl362 data
             // https://github.com/Freeyourgadget/Gadgetbridge/issues/63#issuecomment-302815121
-            debug('RAW data:', value)
+            console.log('RAW data:', value)
         } else {
             debug(event.target.uuid, '=>', value)
         }
@@ -372,10 +393,10 @@ module.exports = MiBand;
 
 function readValueFromChar(char) {
 
-  return new Promise((resolve, reject) => char.read((err, data) => err ? reject(err) : resolve(data)));
+    return new Promise((resolve, reject) => char.read((err, data) => err ? reject(err) : resolve(data)));
 }
 
 function writeValueToChar(char, value) {
 
-  return new Promise((resolve, reject) => char.write(value, true, (err, data) => err ? reject(err) : resolve(data)));
+    return new Promise((resolve, reject) => char.write(value, true, (err, data) => err ? reject(err) : resolve(data)));
 }
