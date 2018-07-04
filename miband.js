@@ -49,7 +49,8 @@ class MiBand extends EventEmitter {
         return [
             uuid.UUID_SERVICE_MIBAND_1,
             uuid.UUID_SERVICE_MIBAND_2,
-            uuid.UUID_SERVICE_HEART_RATE
+            uuid.UUID_SERVICE_HEART_RATE,
+            uuid.UUID_SERVICE_IMMEDIATE_ALERT
         ];
     }
 
@@ -59,7 +60,8 @@ class MiBand extends EventEmitter {
             uuid.UUID_CHAR_AUTH,
             uuid.UUID_CHAR_EVENT, uuid.UUID_CHAR_HRM_CTRL,
             uuid.UUID_CHAR_HRM_DATA,
-            uuid.UUID_CHAR_USER
+            uuid.UUID_CHAR_USER,
+            uuid.UUID_CHAR_ALERT_DATA
         ];
     }
 
@@ -85,7 +87,8 @@ class MiBand extends EventEmitter {
             event: this.getCharacteristic(characteristics, uuid.UUID_CHAR_EVENT),
             heartRateControl: this.getCharacteristic(characteristics, uuid.UUID_CHAR_HRM_CTRL),
             heartRateData: this.getCharacteristic(characteristics, uuid.UUID_CHAR_HRM_DATA),
-            user: this.getCharacteristic(characteristics, uuid.UUID_CHAR_USER)
+            user: this.getCharacteristic(characteristics, uuid.UUID_CHAR_USER),
+            alert: this.getCharacteristic(characteristics, uuid.UUID_CHAR_ALERT_DATA)
         };
     }
 
@@ -152,16 +155,16 @@ class MiBand extends EventEmitter {
         debug('Notification:', type);
         switch (type) {
             case 'message':
-                writeValueToChar(this.device.char[uuid.UUID_SERVICE_ALERT_DATA], new Buffer([0x01]));
+                writeValueToChar(this.device.char[uuid.UUID_CHAR_ALERT_DATA], new Buffer([0x01]));
                 break;
             case 'phone':
-                writeValueToChar(this.device.char[uuid.UUID_SERVICE_ALERT_DATA], new Buffer([0x02]));
+                writeValueToChar(this.device.char[uuid.UUID_CHAR_ALERT_DATA], new Buffer([0x02]));
                 break;
             case 'vibrate':
-                writeValueToChar(this.device.char[uuid.UUID_SERVICE_ALERT_DATA], new Buffer([0x03]));
+                writeValueToChar(this.device.char[uuid.UUID_CHAR_ALERT_DATA], new Buffer([0x03]));
                 break;
             case 'off':
-                writeValueToChar(this.device.char[uuid.UUID_SERVICE_ALERT_DATA], new Buffer([0x00]));
+                writeValueToChar(this.device.char[uuid.UUID_CHAR_ALERT_DATA], new Buffer([0x00]));
                 break;
             default:
                 throw new Error('Unrecognized notification type');
@@ -299,8 +302,7 @@ class MiBand extends EventEmitter {
     /*
      * RAW data
      */
-    /*
-        async rawStart() {
+/*        async rawStart() {
             await this.char.raw_ctrl.writeValue(AB([0x01, 0x03, 0x19]))
             await this.hrmStart();
             await this.char.raw_ctrl.writeValue(AB([0x02]))
