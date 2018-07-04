@@ -7,15 +7,15 @@ const debug = require('debug')('MiBand');
 
 const UUID_BASE = (x) => `0000${x}0000351221180009af100700`;
 
-const UUID_SERVICE_GENERIC_ACCESS =     0x1800;
-const UUID_SERVICE_GENERIC_ATTRIBUTE =  0x1801;
+const UUID_SERVICE_GENERIC_ACCESS = 0x1800;
+const UUID_SERVICE_GENERIC_ATTRIBUTE = 0x1801;
 const UUID_SERVICE_DEVICE_INFORMATION = 0x180a;
-const UUID_SERVICE_FIRMWARE =           UUID_BASE('1530');
+const UUID_SERVICE_FIRMWARE = UUID_BASE('1530');
 const UUID_SERVICE_ALERT_NOTIFICATION = 0x1811;
-const UUID_SERVICE_IMMEDIATE_ALERT =    0x1802;
-const UUID_SERVICE_HEART_RATE =         0x180d;
-const UUID_SERVICE_MIBAND_1 =           0xfee0;
-const UUID_SERVICE_MIBAND_2 =           0xfee1;
+const UUID_SERVICE_IMMEDIATE_ALERT = 0x1802;
+const UUID_SERVICE_HEART_RATE = 0x180d;
+const UUID_SERVICE_MIBAND_1 = 0xfee0;
+const UUID_SERVICE_MIBAND_2 = 0xfee1;
 
 const COMMAND_START_HR_MANUAL = [0x15, 0x02, 0x01];
 const COMMAND_STOP_HR_MANUAL = [0x15, 0x02, 0x00];
@@ -42,351 +42,388 @@ const UUID_SERVICE_FW_CTRL = UUID_BASE('1531');
 const UUID_SERVICE_FW_DATA = UUID_BASE('1532');
 
 
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
+function delay(ms = 3000) {
+    return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 // This is a helper function that constructs an ArrayBuffer based on arguments
-const AB = function() {
-  let args = [...arguments];
+const AB = function () {
+    let args = [...arguments];
 
-  // Convert all arrays to buffers
-  args = args.map(function(i) {
-    if (i instanceof Array) {
-      return Buffer.from(i);
-    }
-    return i;
-  });
+    // Convert all arrays to buffers
+    args = args.map(function (i) {
+        if (i instanceof Array) {
+            return Buffer.from(i);
+        }
+        return i;
+    });
 
-  // Merge into a single buffer
-  let buf = Buffer.concat(args);
+    // Merge into a single buffer
+    let buf = Buffer.concat(args);
 
-  // // Convert into ArrayBuffer
-  // let ab = new ArrayBuffer(buf.length);
-  // let view = new Uint8Array(ab);
-  // for (let i = 0; i < buf.length; ++i) {
-  //   view[i] = buf[i];
-  // }
-  return buf;
+    // // Convert into ArrayBuffer
+    // let ab = new ArrayBuffer(buf.length);
+    // let view = new Uint8Array(ab);
+    // for (let i = 0; i < buf.length; ++i) {
+    //   view[i] = buf[i];
+    // }
+    return buf;
 };
 
 function parseDate(buff) {
-  let year = buff.readUInt16LE(0),
-    mon = buff[2]-1,
-    day = buff[3],
-    hrs = buff[4],
-    min = buff[5],
-    sec = buff[6],
-    msec = buff[8] * 1000 / 256;
-  return new Date(year, mon, day, hrs, min, sec)
+    let year = buff.readUInt16LE(0),
+        mon = buff[2] - 1,
+        day = buff[3],
+        hrs = buff[4],
+        min = buff[5],
+        sec = buff[6],
+        msec = buff[8] * 1000 / 256;
+    return new Date(year, mon, day, hrs, min, sec)
 }
 
 class MiBand extends EventEmitter {
 
-  static get advertisementService() { return 0xFEE0; }
-
-  static get optionalServices() { return [
-    UUID_SERVICE_GENERIC_ACCESS,
-    UUID_SERVICE_GENERIC_ATTRIBUTE,
-    UUID_SERVICE_DEVICE_INFORMATION,
-    UUID_SERVICE_FIRMWARE,
-    UUID_SERVICE_ALERT_NOTIFICATION,
-    UUID_SERVICE_IMMEDIATE_ALERT,
-    UUID_SERVICE_HEART_RATE,
-    UUID_SERVICE_MIBAND_1,
-    UUID_SERVICE_MIBAND_2,
-  ] }
-
-  constructor(peripheral) {
-    super();
-
-    this.device = peripheral;
-    this.char = {};
-
-    // TODO: this is constant for now, but should random and managed per-device
-    this.key = new Buffer('30313233343536373839404142434445', 'hex');
-    this.textDec = new TextDecoder();
-  }
-
-  async startNotificationsFor(charUID) {
-    let char = this.device.char[charUID];
-    char.on('data', this.handleNotify.bind(this, charUID));
-    char.subscribe(err => err && console.error(err));
-    // char.notify(true, err => err && console.error(err));
-    // char.on('message', (...args) => {
-    //   debugger;
-    // });
-    // char.on('handleNotify', (...args) => {
-    //   debugger;
-    // });
-    // char.on('notify', (...args) => {
-    //   debugger;
-    // });
-  }
-
-  async init() {
-    await this.startNotificationsFor(UUID_SERVICE_MI1_CHAR_AUTH);
-    console.log('startNotificationsFor AUTH');
-    await this.authenticate();
-    console.log('authenticate');
-    await this.startNotificationsFor(UUID_SERVICE_HRM_DATA);
-    console.log('startNotificationsFor HRM_DATA');
-    await this.startNotificationsFor(UUID_SERVICE_MI1_CHAR_EVENT);
-    console.log('startNotificationsFor EVENT');
-    await this.startNotificationsFor(UUID_SERVICE_MI1_CHAR_RAW_DATA);
-    console.log('startNotificationsFor RAW_DATA');
-
-    //
-    // Notifications should be enabled after auth
-    // for (let char of ['hrm_data', 'event', 'raw_data']) {
-    //   await this.startNotificationsFor(char)
-    // }
-  }
-
-  /*
-   * Authentication
-   */
-
-  async authenticate() {
-    await this.authReqRandomKey();
-
-    return new Promise((resolve, reject) => {
-      setTimeout(() => reject('authenticate Timeout'), 30000);
-      this.once('authenticated', resolve);
-    });
-  }
-
-  authReqRandomKey()        { return writeValueFromChar(this.device.char[UUID_SERVICE_MI1_CHAR_AUTH], AB([0x02, 0x08])) }
-  authSendNewKey(key)       { return writeValueFromChar(this.device.char[UUID_SERVICE_MI1_CHAR_AUTH], AB([0x01, 0x08], key)) }
-  authSendEncKey(encrypted) { return writeValueFromChar(this.device.char[UUID_SERVICE_MI1_CHAR_AUTH], AB([0x03, 0x08], encrypted)) }
-
-  /*
-   * Button
-   */
-
-  waitButton(timeout = 30000) {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => reject('waitButton Timeout'), timeout);
-      this.once('button', resolve);
-    });
-  }
-
-  /*
-   * Notifications
-   */
-
-  async showNotification(type = 'message') {
-    debug('Notification:', type);
-    switch(type) {
-    case 'message': writeValueFromChar(this.device.char[UUID_SERVICE_ALERT_DATA], new Buffer([0x01]));   break;
-    case 'phone':   writeValueFromChar(this.device.char[UUID_SERVICE_ALERT_DATA], new Buffer([0x02]));   break;
-    case 'vibrate': writeValueFromChar(this.device.char[UUID_SERVICE_ALERT_DATA], new Buffer([0x03]));   break;
-    case 'off':     writeValueFromChar(this.device.char[UUID_SERVICE_ALERT_DATA], new Buffer([0x00]));   break;
-    default:        throw new Error('Unrecognized notification type');
+    static get advertisementService() {
+        return 0xFEE0;
     }
-  }
 
-  /*
-   * Heart Rate Monitor
-   */
-
-  async hrmRead() {
-
-    await writeValueFromChar(this.device.char[UUID_SERVICE_HRM_CTRL], new Buffer([0x15, 0x01, 0x00]));
-    await writeValueFromChar(this.device.char[UUID_SERVICE_HRM_CTRL], new Buffer([0x15, 0x02, 0x00]));
-    await writeValueFromChar(this.device.char[UUID_SERVICE_HRM_CTRL], new Buffer([0x15, 0x02, 0x01]));
-    return new Promise((resolve, reject) => {
-      setTimeout(() => reject('hrmRead Timeout'), 30000);
-      this.once('heart_rate', resolve);
-    });
-  }
-
-  async hrmStart() {
-    await writeValueFromChar(this.device.char[UUID_SERVICE_HRM_CTRL], new Buffer([0x15, 0x02, 0x00]));
-    await writeValueFromChar(this.device.char[UUID_SERVICE_HRM_CTRL], new Buffer([0x15, 0x01, 0x00]));
-    await writeValueFromChar(this.device.char[UUID_SERVICE_HRM_CTRL], new Buffer([0x15, 0x01, 0x01]));
-
-    // Start pinging HRM
-    this.hrmTimer = this.hrmTimer || setInterval(() => {
-      debug('Pinging HRM');
-      writeValueFromChar(this.device.char[UUID_SERVICE_HRM_CTRL], new Buffer([0x16]));
-    },12000);
-  }
-
-  async hrmStop() {
-    clearInterval(this.hrmTimer);
-    this.hrmTimer = undefined;
-    await this.char.hrm_ctrl.writeValue(AB([0x15, 0x01, 0x00]))
-  }
-
-  /*
-   * Pedometer
-   */
-
-  async getPedometerStats() {
-    let data = await readValueFromChar(this.device.char[UUID_SERVICE_MI1_CHAR_STEPS]);
-    data = Buffer.from(data.buffer);
-    let result = {};
-    //unknown = data.readUInt8(0)
-    result.steps = data.readUInt16LE(1);
-    //unknown = data.readUInt16LE(3) // 2 more bytes for steps? ;)
-    if (data.length >= 8)  result.distance = data.readUInt32LE(5);
-    if (data.length >= 12) result.calories = data.readUInt32LE(9);
-    return result;
-  }
-
-  /*
-   * General functions
-   */
-
-  async getBatteryInfo() {
-    let data = await readValueFromChar(this.device.char[UUID_SERVICE_MI1_CHAR_BATT]);
-    data = Buffer.from(data.buffer);
-    if (data.length <= 2) return 'unknown';
-
-    let result = {};
-    result.level = data[1];
-    result.charging = !!data[2];
-    result.off_date = parseDate(data.slice(3, 10));
-    result.charge_date = parseDate(data.slice(11, 18));
-    //result.charge_num = data[10];
-    result.charge_level = data[19];
-    return result;
-  }
-
-  async getTime() {
-    let data = await readValueFromChar(this.device.char[UUID_SERVICE_MI1_CHAR_TIME]);
-    data = Buffer.from(data.buffer);
-    return parseDate(data)
-  }
-
-  async getSerial() {
-    if (!this.device.char[UUID_SERVICE_DEVICE_INFO_SERIAL]) return undefined;
-    let data = await readValueFromChar(this.device.char[UUID_SERVICE_DEVICE_INFO_SERIAL]);
-    return this.textDec.decode(data)
-  }
-
-  async getHwRevision() {
-    let data = await readValueFromChar(this.device.char[UUID_SERVICE_DEVICE_INFO_HW]);
-    data = this.textDec.decode(data);
-    if (data.startsWith('V') || data.startsWith('v'))
-      data = data.substring(1);
-    return data
-  }
-
-  async getSwRevision() {
-    let data = await readValueFromChar(this.device.char[UUID_SERVICE_DEVICE_INFO_SW]);
-    data = this.textDec.decode(data);
-    if (data.startsWith('V') || data.startsWith('v'))
-      data = data.substring(1);
-    return data
-  }
-
-  async setUserInfo(user) {
-    let data = new Buffer(16)
-    data.writeUInt8   (0x4f, 0) // Set user info command
-
-    data.writeUInt16LE(user.born.getFullYear(), 3)
-    data.writeUInt8   (user.born.getMonth()+1, 5)
-    data.writeUInt8   (user.born.getDate(), 6)
-    switch (user.sex) {
-    case 'male':   data.writeUInt8   (0, 7); break;
-    case 'female': data.writeUInt8   (1, 7); break;
-    default:       data.writeUInt8   (2, 7); break;
+    static get optionalServices() {
+        return [
+            UUID_SERVICE_GENERIC_ACCESS,
+            UUID_SERVICE_GENERIC_ATTRIBUTE,
+            UUID_SERVICE_DEVICE_INFORMATION,
+            UUID_SERVICE_FIRMWARE,
+            UUID_SERVICE_ALERT_NOTIFICATION,
+            UUID_SERVICE_IMMEDIATE_ALERT,
+            UUID_SERVICE_HEART_RATE,
+            UUID_SERVICE_MIBAND_1,
+            UUID_SERVICE_MIBAND_2,
+        ]
     }
-    data.writeUInt16LE(user.height,  8) // cm
-    data.writeUInt16LE(user.weight, 10) // kg
-    data.writeUInt32LE(user.id,     12) // id
 
-    await this.char.user.writeValue(AB(data))
-  }
+    constructor(peripheral) {
+        super();
 
-  //async reboot() {
-  //  await this.char.fw_ctrl.writeValue(AB([0x05]))
-  //}
+        this.device = peripheral;
+        this.char = {};
 
-  /*
-   * RAW data
-   */
-
-  async rawStart() {
-    await this.char.raw_ctrl.writeValue(AB([0x01, 0x03, 0x19]))
-    await this.hrmStart();
-    await this.char.raw_ctrl.writeValue(AB([0x02]))
-  }
-
-  async rawStop() {
-    await this.char.raw_ctrl.writeValue(AB([0x03]))
-    await this.hrmStop();
-  }
-
-  /*
-   * Internals
-   */
-
-  handleNotify(charUID, event) {
-    debugger;
-    const value = new Buffer(event);
-
-    if (charUID === UUID_SERVICE_MI1_CHAR_AUTH) {
-      const cmd = value.slice(0,3).toString('hex');
-      if (cmd === '100101') {         // Set New Key OK
-        this.authReqRandomKey()
-      } else if (cmd === '100201') {  // Req Random Number OK
-        let rdn = value.slice(3);
-        let cipher = crypto.createCipheriv('aes-128-ecb', this.key, '').setAutoPadding(false)
-        let encrypted = Buffer.concat([cipher.update(rdn), cipher.final()])
-        this.authSendEncKey(encrypted)
-      } else if (cmd === '100301') {
-        debug('Authenticated');
-        this.emit('authenticated')
-
-      } else if (cmd === '100104') {  // Set New Key FAIL
-        this.emit('error', 'Key Sending failed')
-      } else if (cmd === '100204') {  // Req Random Number FAIL
-        this.emit('error', 'Key Sending failed')
-      } else if (cmd === '100304') {
-        debug('Encryption Key Auth Fail, sending new key...')
-        this.authSendNewKey(this.key)
-      } else {
-        debug('Unhandled auth rsp:', value);
-      }
-
-    } else if (charUID === UUID_SERVICE_HRM_DATA) {
-      let rate = value.readUInt16BE(0);
-      this.emit('heart_rate', rate)
-
-    } else if (charUID === UUID_SERVICE_MI1_CHAR_EVENT) {
-      const cmd = value.toString('hex');
-      if (cmd === '04') {
-        this.emit('button')
-      } else {
-        debug('Unhandled event:', value);
-      }
-    } else if (charUID === UUID_SERVICE_MI1_CHAR_RAW_DATA) {
-      // TODO: parse adxl362 data
-      // https://github.com/Freeyourgadget/Gadgetbridge/issues/63#issuecomment-302815121
-      debug('RAW data:', value)
-    } else {
-      debug(event.target.uuid, '=>', value)
+        // TODO: this is constant for now, but should random and managed per-device
+        this.key = new Buffer('30313233343536373839404142434445', 'hex');
+        this.textDec = new TextDecoder();
     }
-  }
+
+    async startNotificationsFor(charUID) {
+        let char = this.device.char[charUID];
+        char.on('data', this.handleNotify.bind(this, charUID));
+        char.subscribe(err => {err && console.error('start notif', err); console.log('startNotificationsFor: subsribe callback ', charUID)});
+        // char.notify(true, err => err && console.error(err));
+        // char.on('message', (...args) => {
+        //   debugger;
+        // });
+        // char.on('handleNotify', (...args) => {
+        //   debugger;
+        // });
+        // char.on('notify', (...args) => {
+        //   debugger;
+        // });
+    }
+
+    async init() {
+        await delay();
+        await this.startNotificationsFor(UUID_SERVICE_MI1_CHAR_AUTH);
+        console.log('startNotificationsFor AUTH');
+        await delay();
+        await this.authenticate();
+        console.log('authenticate');
+        await delay();
+        await this.startNotificationsFor(UUID_SERVICE_HRM_DATA);
+        console.log('startNotificationsFor HRM_DATA');
+        await delay();
+        await this.startNotificationsFor(UUID_SERVICE_MI1_CHAR_EVENT);
+        console.log('startNotificationsFor EVENT');
+        await delay();
+        await this.startNotificationsFor(UUID_SERVICE_MI1_CHAR_RAW_DATA);
+        console.log('startNotificationsFor RAW_DATA');
+
+        //
+        // Notifications should be enabled after auth
+        // for (let char of ['hrm_data', 'event', 'raw_data']) {
+        //   await this.startNotificationsFor(char)
+        // }
+    }
+
+    /*
+     * Authentication
+     */
+
+    async authenticate() {
+        let promise = new Promise((resolve, reject) => {
+            setTimeout(() => reject('authenticate Timeout'), 30000);
+            this.once('authenticated', resolve);
+        });
+        await this.authReqRandomKey();
+        return promise;
+    }
+
+    authReqRandomKey() {
+        return writeValueFromChar(this.device.char[UUID_SERVICE_MI1_CHAR_AUTH], AB([0x02, 0x08]))
+    }
+
+    authSendNewKey(key) {
+        return writeValueFromChar(this.device.char[UUID_SERVICE_MI1_CHAR_AUTH], AB([0x01, 0x08], key))
+    }
+
+    authSendEncKey(encrypted) {
+        return writeValueFromChar(this.device.char[UUID_SERVICE_MI1_CHAR_AUTH], AB([0x03, 0x08], encrypted))
+    }
+
+    /*
+     * Button
+     */
+
+    waitButton(timeout = 30000) {
+        return new Promise((resolve, reject) => {
+            setTimeout(() => reject('waitButton Timeout'), timeout);
+            this.once('button', resolve);
+        });
+    }
+
+    /*
+     * Notifications
+     */
+
+    async showNotification(type = 'message') {
+        debug('Notification:', type);
+        switch (type) {
+            case 'message':
+                writeValueFromChar(this.device.char[UUID_SERVICE_ALERT_DATA], new Buffer([0x01]));
+                break;
+            case 'phone':
+                writeValueFromChar(this.device.char[UUID_SERVICE_ALERT_DATA], new Buffer([0x02]));
+                break;
+            case 'vibrate':
+                writeValueFromChar(this.device.char[UUID_SERVICE_ALERT_DATA], new Buffer([0x03]));
+                break;
+            case 'off':
+                writeValueFromChar(this.device.char[UUID_SERVICE_ALERT_DATA], new Buffer([0x00]));
+                break;
+            default:
+                throw new Error('Unrecognized notification type');
+        }
+    }
+
+    /*
+     * Heart Rate Monitor
+     */
+
+    async hrmRead() {
+
+        await writeValueFromChar(this.device.char[UUID_SERVICE_HRM_CTRL], new Buffer([0x15, 0x01, 0x00]));
+        await writeValueFromChar(this.device.char[UUID_SERVICE_HRM_CTRL], new Buffer([0x15, 0x02, 0x00]));
+        await writeValueFromChar(this.device.char[UUID_SERVICE_HRM_CTRL], new Buffer([0x15, 0x02, 0x01]));
+        return new Promise((resolve, reject) => {
+            setTimeout(() => reject('hrmRead Timeout'), 30000);
+            this.once('heart_rate', resolve);
+        });
+    }
+
+    async hrmStart() {
+        await writeValueFromChar(this.device.char[UUID_SERVICE_HRM_CTRL], new Buffer([0x15, 0x02, 0x00]));
+        await writeValueFromChar(this.device.char[UUID_SERVICE_HRM_CTRL], new Buffer([0x15, 0x01, 0x00]));
+        await writeValueFromChar(this.device.char[UUID_SERVICE_HRM_CTRL], new Buffer([0x15, 0x01, 0x01]));
+
+        // Start pinging HRM
+        this.hrmTimer = this.hrmTimer || setInterval(() => {
+            debug('Pinging HRM');
+            writeValueFromChar(this.device.char[UUID_SERVICE_HRM_CTRL], new Buffer([0x16]));
+        }, 12000);
+    }
+
+    async hrmStop() {
+        clearInterval(this.hrmTimer);
+        this.hrmTimer = undefined;
+        await this.char.hrm_ctrl.writeValue(AB([0x15, 0x01, 0x00]))
+    }
+
+    /*
+     * Pedometer
+     */
+
+    async getPedometerStats() {
+        let data = await readValueFromChar(this.device.char[UUID_SERVICE_MI1_CHAR_STEPS]);
+        data = Buffer.from(data.buffer);
+        let result = {};
+        //unknown = data.readUInt8(0)
+        result.steps = data.readUInt16LE(1);
+        //unknown = data.readUInt16LE(3) // 2 more bytes for steps? ;)
+        if (data.length >= 8) result.distance = data.readUInt32LE(5);
+        if (data.length >= 12) result.calories = data.readUInt32LE(9);
+        return result;
+    }
+
+    /*
+     * General functions
+     */
+
+    async getBatteryInfo() {
+        await delay();
+        let data = await readValueFromChar(this.device.char[UUID_SERVICE_MI1_CHAR_BATT]);
+        data = Buffer.from(data.buffer);
+        if (data.length <= 2) return 'unknown';
+
+        let result = {};
+        result.level = data[1];
+        result.charging = !!data[2];
+        result.off_date = parseDate(data.slice(3, 10));
+        result.charge_date = parseDate(data.slice(11, 18));
+        //result.charge_num = data[10];
+        result.charge_level = data[19];
+        return result;
+    }
+
+    async getTime() {
+        await delay();
+        let data = await readValueFromChar(this.device.char[UUID_SERVICE_MI1_CHAR_TIME]);
+        data = Buffer.from(data.buffer);
+        return parseDate(data)
+    }
+
+    async getSerial() {
+        if (!this.device.char[UUID_SERVICE_DEVICE_INFO_SERIAL]) return undefined;
+        let data = await readValueFromChar(this.device.char[UUID_SERVICE_DEVICE_INFO_SERIAL]);
+        return this.textDec.decode(data)
+    }
+
+    async getHwRevision() {
+
+        let data = await readValueFromChar(this.device.char[UUID_SERVICE_DEVICE_INFO_HW]);
+        data = this.textDec.decode(data);
+        if (data.startsWith('V') || data.startsWith('v'))
+            data = data.substring(1);
+        return data
+    }
+
+    async getSwRevision() {
+        let data = await readValueFromChar(this.device.char[UUID_SERVICE_DEVICE_INFO_SW]);
+        data = this.textDec.decode(data);
+        if (data.startsWith('V') || data.startsWith('v'))
+            data = data.substring(1);
+        return data
+    }
+
+    async setUserInfo(user) {
+        let data = new Buffer(16)
+        data.writeUInt8(0x4f, 0) // Set user info command
+
+        data.writeUInt16LE(user.born.getFullYear(), 3)
+        data.writeUInt8(user.born.getMonth() + 1, 5)
+        data.writeUInt8(user.born.getDate(), 6)
+        switch (user.sex) {
+            case 'male':
+                data.writeUInt8(0, 7);
+                break;
+            case 'female':
+                data.writeUInt8(1, 7);
+                break;
+            default:
+                data.writeUInt8(2, 7);
+                break;
+        }
+        data.writeUInt16LE(user.height, 8) // cm
+        data.writeUInt16LE(user.weight, 10) // kg
+        data.writeUInt32LE(user.id, 12) // id
+
+        await this.char.user.writeValue(AB(data))
+    }
+
+    //async reboot() {
+    //  await this.char.fw_ctrl.writeValue(AB([0x05]))
+    //}
+
+    /*
+     * RAW data
+     */
+
+    async rawStart() {
+        await this.char.raw_ctrl.writeValue(AB([0x01, 0x03, 0x19]))
+        await this.hrmStart();
+        await this.char.raw_ctrl.writeValue(AB([0x02]))
+    }
+
+    async rawStop() {
+        await this.char.raw_ctrl.writeValue(AB([0x03]))
+        await this.hrmStop();
+    }
+
+    /*
+     * Internals
+     */
+
+    handleNotify(charUID, event) {
+        console.log('handleNotify', charUID, event);
+        debugger;
+        const value = new Buffer(event);
+
+        if (charUID === UUID_SERVICE_MI1_CHAR_AUTH) {
+            const cmd = value.slice(0, 3).toString('hex');
+            if (cmd === '100101') {         // Set New Key OK
+                this.authReqRandomKey()
+            } else if (cmd === '100201') {  // Req Random Number OK
+                let rdn = value.slice(3);
+                let cipher = crypto.createCipheriv('aes-128-ecb', this.key, '').setAutoPadding(false)
+                let encrypted = Buffer.concat([cipher.update(rdn), cipher.final()])
+                this.authSendEncKey(encrypted)
+            } else if (cmd === '100301') {
+                debug('Authenticated');
+                this.emit('authenticated')
+
+            } else if (cmd === '100104') {  // Set New Key FAIL
+                this.emit('error', 'Key Sending failed')
+            } else if (cmd === '100204') {  // Req Random Number FAIL
+                this.emit('error', 'Key Sending failed')
+            } else if (cmd === '100304') {
+                debug('Encryption Key Auth Fail, sending new key...')
+                this.authSendNewKey(this.key)
+            } else {
+                debug('Unhandled auth rsp:', value);
+            }
+
+        } else if (charUID === UUID_SERVICE_HRM_DATA) {
+            let rate = value.readUInt16BE(0);
+            this.emit('heart_rate', rate)
+
+        } else if (charUID === UUID_SERVICE_MI1_CHAR_EVENT) {
+            const cmd = value.toString('hex');
+            if (cmd === '04') {
+                this.emit('button')
+            } else {
+                debug('Unhandled event:', value);
+            }
+        } else if (charUID === UUID_SERVICE_MI1_CHAR_RAW_DATA) {
+            // TODO: parse adxl362 data
+            // https://github.com/Freeyourgadget/Gadgetbridge/issues/63#issuecomment-302815121
+            debug('RAW data:', value)
+        } else {
+            debug(event.target.uuid, '=>', value)
+        }
+    }
 }
 
 module.exports = MiBand;
 
 function readValueFromChar(char) {
-  return new Promise((resolve, reject) => {
-    char.read((err, data) => {
-      err ? reject(err) : resolve(data);
-    })
-  });
-}
-function writeValueFromChar(char, value) {
-  return new Promise((resolve, reject) => {
-    char.write(value, true, function(err, data) {
-      err && console.error(err);
-      err ? reject(err) : resolve(data);
+    return new Promise((resolve, reject) => {
+        char.read((err, data) => {
+            err ? reject(err) : resolve(data);
+        })
     });
-  });
+}
+
+function writeValueFromChar(char, value) {
+    return new Promise((resolve, reject) => {
+        char.write(value, true, function (err, data) {
+            err && console.error(err);
+            err ? reject(err) : resolve(data);
+        });
+    });
 }
