@@ -12,24 +12,6 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-// This is a helper function that constructs an ArrayBuffer based on arguments
-const AB = function () {
-    let args = [...arguments];
-
-    // Convert all arrays to buffers
-    args = args.map(function (i) {
-        if (i instanceof Array) {
-            return Buffer.from(i);
-        }
-        return i;
-    });
-
-    // Merge into a single buffer
-    let buf = Buffer.concat(args);
-
-    return buf;
-};
-
 function parseDate(buff) {
     let year = buff.readUInt16LE(0),
         mon = buff[2] - 1,
@@ -124,15 +106,15 @@ class MiBand extends EventEmitter {
     }
 
     authReqRandomKey() {
-        return writeValueToChar(this.characteristics.auth, AB([0x02, 0x08]))
+        return writeValueToChar(this.characteristics.auth, new Buffer([0x02, 0x08]))
     }
 
     authSendNewKey(key) {
-        return writeValueToChar(this.characteristics.auth, AB([0x01, 0x08], key))
+        return writeValueToChar(this.characteristics.auth, Buffer.concat([new Buffer([0x01, 0x08]), key]));
     }
 
     authSendEncKey(encrypted) {
-        return writeValueToChar(this.characteristics.auth, AB([0x03, 0x08], encrypted))
+        return writeValueToChar(this.characteristics.auth, Buffer.concat([new Buffer([0x03, 0x08]), encrypted]));
     }
 
     /*
@@ -198,7 +180,7 @@ class MiBand extends EventEmitter {
     async hrmStop() {
         clearInterval(this.hrmTimer);
         this.hrmTimer = undefined;
-        await writeValueToChar(this.characteristics.heartRateControl, AB([0x15, 0x01, 0x00]));
+        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x00]));
     }
 
     /*
@@ -289,7 +271,7 @@ class MiBand extends EventEmitter {
         data.writeUInt16LE(user.weight, 10); // kg
         data.writeUInt32LE(user.id, 12); // id
 
-        await writeValueToChar(this.characteristics.user, AB(data));
+        await writeValueToChar(this.characteristics.user, new Buffer(data));
     }
 
     //async reboot() {
