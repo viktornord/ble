@@ -2,7 +2,7 @@ const Noble = require('noble/lib/noble');
 const bindings = require('noble/lib/resolve-bindings')();
 const noble = new Noble(bindings);
 const util = require('util');
-const MiBand = require('./miband-js/src/miband');
+const MiBand = require('./miband');
 
 
 function delay(ms = 1000) {
@@ -20,8 +20,7 @@ noble.on('stateChange', function (state) {
 });
 
 
-async function init(device) {
-  const miband = new MiBand(device);
+async function init(miband) {
   await delay();
   await miband.init();
 //   let info = {
@@ -76,14 +75,9 @@ noble.on('discover', async function (peripheral) {
     noble.stopScanning();
     try {
       await util.promisify(peripheral.connect.bind(peripheral))();
-      await new Promise((resolve, reject) => peripheral.discoverSomeServicesAndCharacteristics(
-        MiBand.getServicesToDiscover(),
-        MiBand.getCharacteristicsToDiscover(),
-        (error, services, characteristics) => {
-          error ? reject(error) : resolve({services, characteristics});
-        }
-      ));
-      await init(peripheral);
+      const miband = new MiBand(peripheral);
+      await miband.discoverCharacteristics();
+      await init(miband);
 
     }
     catch (error) {
