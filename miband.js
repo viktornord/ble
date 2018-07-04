@@ -194,12 +194,12 @@ class MiBand extends EventEmitter {
         await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x02, 0x00]));
         await delay(1000);
         await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x00]));
-       /* await delay(1000);
-        await writeValueToChar(this.characteristics.rawControl, new Buffer([0x01, 0x03, 0x19]));*/
+        await delay(1000);
+        await writeValueToChar(this.characteristics.rawControl, new Buffer([0x01, 0x03, 0x19]));
         await delay(1000);
         await writeValueToChar(this.characteristics.heartRateData, new Buffer([0x01, 0x00]));
-        /*await delay(1000);
-        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x01]));*/
+        await delay(1000);
+        await writeValueToChar(this.characteristics.heartRateControl, new Buffer([0x15, 0x01, 0x01]));
         //await delay(1000);
         //await writeValueToChar(this.characteristics.rawControl, new Buffer([0x02]));
 
