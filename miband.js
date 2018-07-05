@@ -62,8 +62,7 @@ class MiBand extends EventEmitter {
     constructor(peripheral) {
         super();
         this.device = peripheral;
-        this.key = new Buffer(this.device.id, 'hex');
-
+        this.key = new Buffer(this.device.address.replace(/:/g, '0')).slice(0, 16);
     }
 
     async discoverCharacteristics() {
