@@ -95,7 +95,15 @@ class MiBand extends EventEmitter {
         char.subscribe(err => err && console.error('start notif', err));
     }
 
+    initKey() {
+        this.key = Buffer.alloc(16);
+        this.key.write(this.serialNumber || '30313233343536373839404142434445');
+        !this.serialNumber && console.warn('Serial number can not be retrieved. Used default auth key');
+    }
+
     async init() {
+        this.serialNumber = await this.getSerial();
+        this.initKey();
         await this.startNotificationsFor(this.characteristics.auth);
         console.log('startNotificationsFor AUTH');
         await delay(1000);

@@ -33,7 +33,7 @@ async function init(miband) {
         battery: await miband.getBatteryInfo(),
         hw_ver: await miband.getHwRevision(),
         sw_ver: await miband.getSwRevision(),
-        serial: await miband.getSerial(),
+        serial: miband.serialNumber,
     };
 
     log(`HW ver: ${info.hw_ver}  SW ver: ${info.sw_ver}`);
@@ -83,7 +83,7 @@ noble.on('discover', async function (peripheral) {
         ' with address <' + peripheral.address + ', ' + peripheral.addressType + '>,' +
         ' connectable ' + peripheral.connectable + ',' +
         ' RSSI ' + peripheral.rssi + ':' + 'local name: \t' + peripheral.advertisement.localName);
-    if (peripheral.advertisement.localName && peripheral.address === DEVICE_ADDRESS) {
+    if (peripheral.address && peripheral.address === DEVICE_ADDRESS) {
         noble.stopScanning();
         connect(peripheral);
 
