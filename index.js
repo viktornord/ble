@@ -1,8 +1,12 @@
+const util = require('util');
+const path = require('path');
 const Noble = require('noble/lib/noble');
 const bindings = require('noble/lib/resolve-bindings')();
 const noble = new Noble(bindings);
-const util = require('util');
 const MiBand = require('./miband');
+
+require('dotenv').config({path: path.resolve(__dirname, '.env')});
+const {DEVICE_ADDRESS} = process.env;
 
 let peripheralMiBand, miband;
 
@@ -79,7 +83,7 @@ noble.on('discover', async function (peripheral) {
         ' with address <' + peripheral.address + ', ' + peripheral.addressType + '>,' +
         ' connectable ' + peripheral.connectable + ',' +
         ' RSSI ' + peripheral.rssi + ':' + 'local name: \t' + peripheral.advertisement.localName);
-    if (peripheral.advertisement.localName && peripheral.advertisement.localName.includes('MI Band 2')) {
+    if (peripheral.advertisement.localName && peripheral.address === DEVICE_ADDRESS) {
         noble.stopScanning();
         connect(peripheral);
 
